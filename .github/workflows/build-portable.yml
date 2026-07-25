@@ -1,0 +1,84 @@
+name: Build Zen Portable
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Версия Zen (тег релиза) или latest"
+        required: false
+        default: "latest"
+      arch:
+        description: "Архитектура Windows"
+        type: choice
+        options: [x86_64, arm64]
+        default: x86_64
+  schedule:
+    # Каждый понедельник в 06:00 UTC — автоматически собирает свежую версию
+    - cron: "0 6 * * 1"
+
+permissions:
+  contents: write
+
+jobs:
+  portable:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout builder
+        uses: actions/checkout@v4
+
+      - name: Setup Go (for .exe launcher)
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+
+      - name: Build portable package
+        shell: pwsh
+        run: |
+          $version = "${{ github.event.inputs.version }}"
+          if (-not $version) { $version = "latest" }
+          $arch = "${{ github.event.inputs.arch }}"
+          if (-not $arch) { $arch = "x86_64" }
+          .\builder\package-release.ps1 -Version $version -Arch $arch
+
+      - name: Read version tag
+        id: ver
+        shell: pwsh
+        run: |
+          $zip = Get-ChildItem output\*.zip | Select-Object -First 1
+          echo "zipname=$($zip.Name)" >> $env:GITHUB_OUTPUT
+          $tag = ($zip.BaseName -replace '^ZenBrowserPortable-','' -replace '-win-.*$','')
+          echo "tag=$tag" >> $env:GITHUB_OUTPUT
+
+      - name: Smoke test zip
+        shell: pwsh
+        run: |
+          $zip = Get-ChildItem output\*.zip | Select-Object -First 1
+          if (-not $zip) { throw "No zip produced" }
+          if ($zip.Length -lt 80MB) { throw "Zip too small: $([math]::Round($zip.Length/1MB)) MB - likely broken build" }
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $archive = [System.IO.Compression.ZipFile]::OpenRead($zip.FullName)
+          $entries = $archive.Entries.FullName
+          foreach ($req in @("App/Zen/zen.exe", "Start-ZenPortable.bat", "VERSION.txt", "ZenBrowserPortable.exe")) {
+            if (-not ($entries -contains $req)) { throw "Zip missing $req" }
+          }
+          $archive.Dispose()
+          Write-Host "Smoke test OK: $($zip.Name), $([math]::Round($zip.Length/1MB)) MB"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.ver.outputs.zipname }}
+          path: output/*.zip
+          retention-days: 30
+
+      # Дополнительно публикуем как релиз в ТВОЁМ репозитории,
+      # чтобы была постоянная ссылка на скачивание
+      - name: Publish release in this repo
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: portable-${{ steps.ver.outputs.tag }}
+          name: Zen Portable ${{ steps.ver.outputs.tag }}
+          files: output/*.zip
+          body: |
+            Автоматическая portable-сборка Zen Browser ${{ steps.ver.outputs.tag }}.
+            Распакуй zip и запусти Start-ZenPortable.bat.
