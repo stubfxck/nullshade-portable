@@ -1,0 +1,41 @@
+name: Keepalive
+
+# GitHub отключает scheduled (cron) workflows, если в репозитории не было
+# новых коммитов 60 дней подряд — именно это глушило еженедельную сборку
+# build-portable.yml, когда никто не трогал репозиторий больше 2 месяцев.
+#
+# Этот workflow раз в месяц делает тривиальный коммит (обновляет таймстамп
+# в .github/.keepalive), что засчитывается как активность репозитория и
+# сбрасывает таймер для ВСЕХ scheduled workflows — включая себя самого.
+# Работает бесконечно без внешней инфраструктуры.
+
+on:
+  schedule:
+    - cron: "0 6 1 * *" # 1-е число каждого месяца, 06:00 UTC — с большим запасом до 60 дней
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  keepalive:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Touch keepalive marker
+        run: |
+          mkdir -p .github
+          date -u +"%Y-%m-%dT%H:%M:%SZ" > .github/.keepalive
+
+      - name: Commit and push if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .github/.keepalive
+          if git diff --cached --quiet; then
+            echo "Нечего коммитить (не должно происходить, но на всякий случай)"
+          else
+            git commit -m "chore: keepalive (защита от 60-дневного автоотключения Actions)"
+            git push
+          fi
