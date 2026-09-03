@@ -15,6 +15,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"syscall"
 )
 
 func main() {
@@ -28,6 +29,11 @@ func main() {
 	root := filepath.Dir(exePath)
 	dataDir := filepath.Join(root, "Data")
 	appZenExe := filepath.Join(root, "App", "Zen", "zen.exe")
+
+	// Support\ (bat-запуск, version.json) не для обычного использования —
+	// прячем каждый раз, на случай если архиватор при распаковке не сохранил
+	// атрибут (Compress-Archive/7-Zip это не гарантируют).
+	hideSupportDir(root)
 
 	_ = os.MkdirAll(dataDir, 0o755)
 	cfg := loadOrCreateConfig(dataDir)
@@ -102,6 +108,21 @@ func runZen(root, app, dataDir string) {
 	if runErr != nil {
 		fail(runErr)
 	}
+}
+
+// hideSupportDir ставит атрибут Hidden на папку Support\. Не критично, если
+// не получится (например, папки ещё нет при самой первой распаковке) —
+// молча пропускаем.
+func hideSupportDir(root string) {
+	dir := filepath.Join(root, "Support")
+	if _, err := os.Stat(dir); err != nil {
+		return
+	}
+	p, err := syscall.UTF16PtrFromString(dir)
+	if err != nil {
+		return
+	}
+	_ = syscall.SetFileAttributes(p, syscall.FILE_ATTRIBUTE_HIDDEN)
 }
 
 // systemLeftoverCandidates — известные места, куда Firefox-база может

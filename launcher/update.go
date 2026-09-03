@@ -138,36 +138,60 @@ func (w *progressWriter) finish() {
 	fmt.Println()
 }
 
+// updatePayload — то, что достаём из скачанного релиза, кроме содержимого
+// App/Zen/ (оно распаковывается прямо в appZenTarget, см. extractUpdateZip).
+type updatePayload struct {
+	exe     []byte            // ZenBrowserPortable.exe
+	version []byte            // Support/version.json
+	support map[string][]byte // остальные файлы Support/* (bat, VERSION.txt) — имя файла -> содержимое
+}
+
 // extractUpdateZip распаковывает из скачанного релиза только то, что нужно
-// для обновления: содержимое App/Zen/ (в appZenTarget), сам лаунчер
-// (ZenBrowserPortable.exe) и version.json. Data/ и прочее из архива не трогаем.
-func extractUpdateZip(zipPath, appZenTarget string) (exeBytes []byte, versionBytes []byte, err error) {
+// для обновления: содержимое App/Zen/ (в appZenTarget), сам лаунчер и файлы
+// Support/*. Data/ и прочее из архива не трогаем.
+//
+// Поддержка старых установок: если в архиве почему-то нет Support/ (старый
+// билдер), version.json ищем и в корне архива — так уже обновлённый лаунчер
+// не спотыкается о зип, собранный до переезда в Support\.
+func extractUpdateZip(zipPath, appZenTarget string) (*updatePayload, error) {
 	r, err := zip.OpenReader(zipPath)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	defer r.Close()
 
 	if err := os.RemoveAll(appZenTarget); err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	if err := os.MkdirAll(appZenTarget, 0o755); err != nil {
-		return nil, nil, err
+		return nil, err
 	}
+
+	payload := &updatePayload{support: map[string][]byte{}}
 
 	for _, f := range r.File {
 		name := strings.ReplaceAll(f.Name, "\\", "/")
 		switch {
 		case name == "ZenBrowserPortable.exe":
-			exeBytes, err = readZipFile(f)
+			payload.exe, err = readZipFile(f)
 			if err != nil {
-				return nil, nil, err
+				return nil, err
 			}
-		case name == "version.json":
-			versionBytes, err = readZipFile(f)
+		case name == "Support/version.json", name == "version.json":
+			payload.version, err = readZipFile(f)
 			if err != nil {
-				return nil, nil, err
+				return nil, err
 			}
+		case strings.HasPrefix(name, "Support/"):
+			rel := strings.TrimPrefix(name, "Support/")
+			if rel == "" || f.FileInfo().IsDir() {
+				continue
+			}
+			b, err := readZipFile(f)
+			if err != nil {
+				return nil, err
+			}
+			payload.support[rel] = b
 		case strings.HasPrefix(name, "App/Zen/"):
 			rel := strings.TrimPrefix(name, "App/Zen/")
 			if rel == "" {
@@ -176,22 +200,83 @@ func extractUpdateZip(zipPath, appZenTarget string) (exeBytes []byte, versionByt
 			target := filepath.Join(appZenTarget, filepath.FromSlash(rel))
 			if f.FileInfo().IsDir() {
 				if err := os.MkdirAll(target, 0o755); err != nil {
-					return nil, nil, err
+					return nil, err
 				}
 				continue
 			}
 			if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
-				return nil, nil, err
+				return nil, err
 			}
 			if err := extractZipFileTo(f, target); err != nil {
-				return nil, nil, err
+				return nil, err
 			}
 		}
 	}
-	if exeBytes == nil {
-		return nil, nil, fmt.Errorf("в архиве не нашёлся ZenBrowserPortable.exe")
+	if payload.exe == nil {
+		return nil, fmt.Errorf("в архиве не нашёлся ZenBrowserPortable.exe")
 	}
-	return exeBytes, versionBytes, nil
+	return payload, nil
+}
+
+// dumpSupportFiles пишет version.json и прочие файлы из payload.support в dir
+// (это либо root\Support, либо временная папка стейджинга для фонового режима).
+func dumpSupportFiles(dir string, payload *updatePayload) error {
+	if payload.version == nil && len(payload.support) == 0 {
+		return nil
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	if payload.version != nil {
+		if err := os.WriteFile(filepath.Join(dir, "version.json"), payload.version, 0o644); err != nil {
+			return err
+		}
+	}
+	for name, b := range payload.support {
+		if err := os.WriteFile(filepath.Join(dir, filepath.FromSlash(name)), b, 0o644); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// writeSupportFiles кладёт файлы Support/* прямо в root\Support и подчищает
+// version.json, оставшийся в корне от установки, сделанной до переезда в
+// Support\ (см. cleanupLegacyVersionJSON).
+func writeSupportFiles(root string, payload *updatePayload) {
+	if err := dumpSupportFiles(filepath.Join(root, "Support"), payload); err != nil {
+		return
+	}
+	if payload.version != nil {
+		cleanupLegacyVersionJSON(root)
+	}
+	hideSupportDir(root)
+}
+
+// copySupportDir копирует файлы (без подпапок) из srcDir в dstDir — используется,
+// чтобы перенести застейдженные в фоне файлы Support/* в root\Support при
+// применении отложенного обновления.
+func copySupportDir(srcDir, dstDir string) error {
+	entries, err := os.ReadDir(srcDir)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(dstDir, 0o755); err != nil {
+		return err
+	}
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		b, err := os.ReadFile(filepath.Join(srcDir, e.Name()))
+		if err != nil {
+			return err
+		}
+		if err := os.WriteFile(filepath.Join(dstDir, e.Name()), b, 0o644); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func readZipFile(f *zip.File) ([]byte, error) {
@@ -317,7 +402,7 @@ func downloadAndApplyBlocking(root, dataDir string, asset *ghAsset, tag string) 
 
 	step("Распаковываю...")
 	stagedAppZen := filepath.Join(tmpDir, "App-Zen-new")
-	exeBytes, versionBytes, err := extractUpdateZip(zipPath, stagedAppZen)
+	payload, err := extractUpdateZip(zipPath, stagedAppZen)
 	if err != nil {
 		return err
 	}
@@ -326,10 +411,8 @@ func downloadAndApplyBlocking(root, dataDir string, asset *ghAsset, tag string) 
 	if err := swapAppZen(root, stagedAppZen); err != nil {
 		return err
 	}
-	if versionBytes != nil {
-		_ = os.WriteFile(filepath.Join(root, "version.json"), versionBytes, 0o644)
-	}
-	if err := applySelfUpdate(exeBytes); err != nil {
+	writeSupportFiles(root, payload)
+	if err := applySelfUpdate(payload.exe); err != nil {
 		warn("Браузер обновлён, но не смог обновить сам лаунчер: " + err.Error())
 	}
 	return nil
@@ -349,17 +432,18 @@ func downloadAndStageUpdate(dataDir string, asset *ghAsset, tag string) error {
 	}
 
 	stagedAppZen := filepath.Join(pending, "App-Zen")
-	exeBytes, versionBytes, err := extractUpdateZip(zipPath, stagedAppZen)
+	payload, err := extractUpdateZip(zipPath, stagedAppZen)
 	if err != nil {
 		os.RemoveAll(pending)
 		return err
 	}
-	if err := os.WriteFile(filepath.Join(pending, "launcher.exe"), exeBytes, 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(pending, "launcher.exe"), payload.exe, 0o644); err != nil {
 		os.RemoveAll(pending)
 		return err
 	}
-	if versionBytes != nil {
-		_ = os.WriteFile(filepath.Join(pending, "version.json"), versionBytes, 0o644)
+	if err := dumpSupportFiles(filepath.Join(pending, "Support"), payload); err != nil {
+		os.RemoveAll(pending)
+		return err
 	}
 
 	manifest, _ := json.Marshal(map[string]string{"tag": tag})
@@ -401,8 +485,9 @@ func applyPendingUpdateIfAny(root, dataDir string) {
 		warn("Не смог установить отложенное обновление: " + err.Error())
 		return // pending не чистим — попробуем ещё раз в следующий запуск
 	}
-	if vb, err := os.ReadFile(filepath.Join(pending, "version.json")); err == nil {
-		_ = os.WriteFile(filepath.Join(root, "version.json"), vb, 0o644)
+	if err := copySupportDir(filepath.Join(pending, "Support"), filepath.Join(root, "Support")); err == nil {
+		cleanupLegacyVersionJSON(root)
+		hideSupportDir(root)
 	}
 	if exeBytes, err := os.ReadFile(filepath.Join(pending, "launcher.exe")); err == nil {
 		if err := applySelfUpdate(exeBytes); err != nil {

@@ -76,7 +76,8 @@ New-Item -ItemType Directory -Force `
     (Join-Path $Pkg "App\Zen"), `
     (Join-Path $Pkg "Data\profile"), `
     (Join-Path $Pkg "Data\cache"), `
-    (Join-Path $Pkg "Data\temp") | Out-Null
+    (Join-Path $Pkg "Data\temp"), `
+    (Join-Path $Pkg "Support") | Out-Null
 
 Copy-Item -Recurse -Force "$CoreDir\*" (Join-Path $Pkg "App\Zen")
 
@@ -128,7 +129,12 @@ New-Item -ItemType Directory -Force $DistDir | Out-Null
 "@ | Set-Content -Encoding ASCII (Join-Path $DistDir "policies.json")
 
 $TemplateDir = Join-Path $PSScriptRoot "template"
-Copy-Item (Join-Path $TemplateDir "Start-ZenPortable.bat") $Pkg
+$SupportDir = Join-Path $Pkg "Support"
+# Всё, что не нужно видеть при обычном использовании (запасной .bat,
+# машиночитаемая версия), лежит в Support\ и помечается скрытой папкой —
+# на виду только .exe, README и App/Data. См. hideSupportDir() в launcher/main.go:
+# он же перепрячет папку на диске пользователя, если та расшилась при копировании.
+Copy-Item (Join-Path $TemplateDir "Start-ZenPortable.bat") $SupportDir
 Copy-Item (Join-Path $TemplateDir "README-PORTABLE.md") $Pkg
 
 @"
@@ -138,7 +144,7 @@ Arch: win-$Arch
 Mode: release-repackage
 Built: $(Get-Date -Format "yyyy-MM-dd HH:mm:ss")
 Source: https://github.com/zen-browser/desktop/releases/tag/$Tag
-"@ | Set-Content -Encoding UTF8 (Join-Path $Pkg "VERSION.txt")
+"@ | Set-Content -Encoding UTF8 (Join-Path $SupportDir "VERSION.txt")
 
 # version.json — машиночитаемая версия для автообновления в лаунчере.
 # portableTag должен буквально совпадать с tag_name релиза в этом репозитории
@@ -149,7 +155,11 @@ $BuiltAtIso = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
     zenTag      = $Tag
     arch        = "win-$Arch"
     builtAt     = $BuiltAtIso
-} | ConvertTo-Json | Set-Content -Encoding UTF8 (Join-Path $Pkg "version.json")
+} | ConvertTo-Json | Set-Content -Encoding UTF8 (Join-Path $SupportDir "version.json")
+
+# Скрытый атрибут — на случай, если пользователь распакует архивером,
+# который его не сохраняет, лаунчер всё равно переустановит его при запуске.
+(Get-Item $SupportDir).Attributes = (Get-Item $SupportDir).Attributes -bor [System.IO.FileAttributes]::Hidden
 
 # --- 5. Лаунчер .exe (если доступен Go; иначе остаётся .bat) ----------------
 $LauncherSrc = Join-Path $PSScriptRoot "..\launcher"
@@ -176,9 +186,9 @@ Write-Host "== Validating package..."
 $Required = @(
     "App\Zen\zen.exe",
     "App\Zen\omni.ja",
-    "Start-ZenPortable.bat",
-    "VERSION.txt",
-    "version.json"
+    "Support\Start-ZenPortable.bat",
+    "Support\VERSION.txt",
+    "Support\version.json"
 )
 foreach ($r in $Required) {
     if (-not (Test-Path (Join-Path $Pkg $r))) { throw "VALIDATION FAILED: missing $r" }

@@ -16,15 +16,30 @@ type localVersion struct {
 }
 
 func readVersionJSON(root string) (*localVersion, error) {
-	b, err := os.ReadFile(filepath.Join(root, "version.json"))
+	b, err := os.ReadFile(filepath.Join(root, "Support", "version.json"))
 	if err != nil {
-		return nil, err
+		// Совместимость со старыми установками (до переезда в Support\):
+		// version.json лежал прямо в корне пакета. Само подчистится при
+		// следующем успешном обновлении (см. cleanupLegacyVersionJSON).
+		b, err = os.ReadFile(filepath.Join(root, "version.json"))
+		if err != nil {
+			return nil, err
+		}
 	}
 	var v localVersion
 	if err := json.Unmarshal(b, &v); err != nil {
 		return nil, err
 	}
 	return &v, nil
+}
+
+// cleanupLegacyVersionJSON убирает version.json из корня пакета, если он там
+// остался от установки, сделанной до переезда версии в Support\.
+func cleanupLegacyVersionJSON(root string) {
+	legacy := filepath.Join(root, "version.json")
+	if _, err := os.Stat(legacy); err == nil {
+		_ = os.Remove(legacy)
+	}
 }
 
 // launcherConfig живёт в Data\launcher-config.json — то есть переживает

@@ -1,7 +1,8 @@
 @echo off
 setlocal
 
-set "ROOT=%~dp0"
+rem Лежит в Support\, корень пакета - на уровень выше.
+set "ROOT=%~dp0..\"
 set "APP=%ROOT%App\Zen"
 set "PROFILE=%ROOT%Data\profile"
 set "CACHE=%ROOT%Data\cache"
