@@ -140,6 +140,17 @@ Built: $(Get-Date -Format "yyyy-MM-dd HH:mm:ss")
 Source: https://github.com/zen-browser/desktop/releases/tag/$Tag
 "@ | Set-Content -Encoding UTF8 (Join-Path $Pkg "VERSION.txt")
 
+# version.json — машиночитаемая версия для автообновления в лаунчере.
+# portableTag должен буквально совпадать с tag_name релиза в этом репозитории
+# (см. .github/workflows/build-portable.yml: tag_name: portable-$Tag).
+$BuiltAtIso = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+@{
+    portableTag = "portable-$Tag"
+    zenTag      = $Tag
+    arch        = "win-$Arch"
+    builtAt     = $BuiltAtIso
+} | ConvertTo-Json | Set-Content -Encoding UTF8 (Join-Path $Pkg "version.json")
+
 # --- 5. Лаунчер .exe (если доступен Go; иначе остаётся .bat) ----------------
 $LauncherSrc = Join-Path $PSScriptRoot "..\launcher"
 if ((Get-Command go -ErrorAction SilentlyContinue) -and (Test-Path (Join-Path $LauncherSrc "main.go"))) {
@@ -148,7 +159,10 @@ if ((Get-Command go -ErrorAction SilentlyContinue) -and (Test-Path (Join-Path $L
     $env:GOOS = "windows"
     $env:GOARCH = if ($Arch -eq "arm64") { "arm64" } else { "amd64" }
     $env:CGO_ENABLED = "0"
-    go build -ldflags "-s -w -H=windowsgui" -o (Join-Path $Pkg "ZenBrowserPortable.exe") .
+    # Без -H=windowsgui: лаунчеру нужна консоль, чтобы показывать прогресс
+    # проверки/установки обновлений (см. launcher/console.go). Окно прячется
+    # само (hideConsoleWindow) в момент запуска Zen — see main.go.
+    go build -ldflags "-s -w" -o (Join-Path $Pkg "ZenBrowserPortable.exe") .
     Pop-Location
     if (-not (Test-Path (Join-Path $Pkg "ZenBrowserPortable.exe"))) {
         throw "Launcher build failed"
@@ -163,7 +177,8 @@ $Required = @(
     "App\Zen\zen.exe",
     "App\Zen\omni.ja",
     "Start-ZenPortable.bat",
-    "VERSION.txt"
+    "VERSION.txt",
+    "version.json"
 )
 foreach ($r in $Required) {
     if (-not (Test-Path (Join-Path $Pkg $r))) { throw "VALIDATION FAILED: missing $r" }

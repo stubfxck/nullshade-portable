@@ -1,13 +1,13 @@
-// ZenBrowserPortable.exe — нативный лаунчер с режимом «ноль следов».
+// ZenBrowserPortable.exe — нативный лаунчер с режимом «ноль следов» и автообновлением.
 //
-// Делает три вещи:
-//  1. Запускает App/Zen/zen.exe с профилем внутри Data/ (ничего не читает из системы).
-//  2. Перенаправляет TEMP/TMP/APPDATA/LOCALAPPDATA внутрь Data/ для дочернего процесса.
-//  3. Ждёт закрытия браузера и удаляет каталоги, которые Zen/Firefox могли создать
-//     в системном AppData — но ТОЛЬКО те, которых не существовало до запуска
-//     (чтобы не тронуть данные установленного Zen/Firefox на этой машине).
+// При каждом запуске:
+//  1. Если раньше в фоне докачалось обновление — ставит его первым делом (быстро, локально).
+//  2. Проверяет GitHub Releases на новую версию (можно выключить в Data\launcher-config.json).
+//  3. Запускает App/Zen/zen.exe с профилем внутри Data/, ничего не читая из системы.
+//  4. Ждёт закрытия браузера и убирает случайно созданные каталоги в системном AppData —
+//     но ТОЛЬКО те, которых не существовало до запуска.
 //
-// Компилируется без внешних зависимостей: go build.
+// Компилируется без CGO: go build.
 package main
 
 import (
@@ -18,21 +18,46 @@ import (
 )
 
 func main() {
+	enableColors()
+	banner()
+
 	exePath, err := os.Executable()
 	if err != nil {
 		fail(err)
 	}
 	root := filepath.Dir(exePath)
+	dataDir := filepath.Join(root, "Data")
+	appZenExe := filepath.Join(root, "App", "Zen", "zen.exe")
 
-	app := filepath.Join(root, "App", "Zen", "zen.exe")
-	profile := filepath.Join(root, "Data", "profile")
-	temp := filepath.Join(root, "Data", "temp")
-	appdataR := filepath.Join(root, "Data", "appdata", "Roaming")
-	appdataL := filepath.Join(root, "Data", "appdata", "Local")
+	_ = os.MkdirAll(dataDir, 0o755)
+	cfg := loadOrCreateConfig(dataDir)
 
-	if _, err := os.Stat(app); err != nil {
-		fail(fmt.Errorf("zen.exe not found: %s", app))
+	applyPendingUpdateIfAny(root, dataDir)
+
+	if cfg.AutoUpdateEnabled {
+		if ver, err := readVersionJSON(root); err == nil {
+			checkAndHandleUpdate(root, dataDir, ver, cfg)
+		} else {
+			warn("version.json не найден — пропускаю проверку обновлений (ручная/локальная сборка?).")
+		}
+	} else {
+		step("Автообновление выключено (Data\\launcher-config.json).")
 	}
+
+	if _, err := os.Stat(appZenExe); err != nil {
+		fail(fmt.Errorf("zen.exe не найден: %s", appZenExe))
+	}
+
+	step("Запускаю Zen...")
+	hideConsoleWindow()
+	runZen(root, appZenExe, dataDir)
+}
+
+func runZen(root, app, dataDir string) {
+	profile := filepath.Join(dataDir, "profile")
+	temp := filepath.Join(dataDir, "temp")
+	appdataR := filepath.Join(dataDir, "appdata", "Roaming")
+	appdataL := filepath.Join(dataDir, "appdata", "Local")
 
 	for _, dir := range []string{profile, temp, appdataR, appdataL} {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -65,7 +90,8 @@ func main() {
 		"MOZ_CRASHREPORTER_DISABLE=1",
 	)
 
-	// Run (а не Start): ждём закрытия браузера, чтобы прибраться за ним.
+	// Run (а не Start): ждём закрытия браузера, чтобы прибраться за ним
+	// и чтобы фоновая докачка обновления (если она идёт) успела дожить до конца.
 	runErr := cmd.Run()
 
 	// Уборка: удаляем только то, чего не было до запуска.
@@ -108,9 +134,12 @@ func systemLeftoverCandidates() []string {
 }
 
 func fail(err error) {
-	// Пишем лог рядом с лаунчером, т.к. GUI-приложение не имеет консоли.
+	errLine(err.Error())
+	// Дублируем в файл на случай, если консоль почему-то не видна (например,
+	// EXE запущен нестандартным способом).
 	exePath, _ := os.Executable()
 	logPath := filepath.Join(filepath.Dir(exePath), "launcher-error.log")
 	_ = os.WriteFile(logPath, []byte(err.Error()+"\n"), 0o644)
+	pauseForError()
 	os.Exit(1)
 }
