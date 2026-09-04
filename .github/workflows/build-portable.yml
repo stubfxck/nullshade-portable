@@ -91,11 +91,14 @@ jobs:
       # (Settings → Secrets and variables → Actions → New repository secret).
       # Без секрета шаг просто пропускается, форки/чужие клоны не ломает.
       - name: Notify Discord
-        if: ${{ secrets.DISCORD_WEBHOOK_URL != '' }}
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         shell: pwsh
         run: |
+          if (-not $env:DISCORD_WEBHOOK_URL) {
+            Write-Host "DISCORD_WEBHOOK_URL secret не задан — пропускаю уведомление."
+            exit 0
+          }
           $body = @{
             username   = "Zen Portable Builder"
             embeds     = @(
