@@ -158,9 +158,13 @@ $BuiltAtIso = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
     builtAt     = $BuiltAtIso
 } | ConvertTo-Json | Set-Content -Encoding UTF8 (Join-Path $SupportDir "version.json")
 
-# Скрытый атрибут — на случай, если пользователь распакует архивером,
-# который его не сохраняет, лаунчер всё равно переустановит его при запуске.
-(Get-Item $SupportDir).Attributes = (Get-Item $SupportDir).Attributes -bor [System.IO.FileAttributes]::Hidden
+# Атрибут Hidden на Support\ здесь НЕ ставим: это транзитная папка сборки
+# ($Pkg живёт только в work\, не попадает пользователю), а wildcard-раскрытие
+# "$Pkg\*" в Compress-Archive молча пропускает скрытые элементы — если
+# пометить Support\ скрытым до зипа, он целиком вылетает из архива (поймано
+# на реальном прогоне CI). Реальное скрытие для пользователя делает
+# hideSupportDir() в launcher/main.go на каждом запуске — этого достаточно,
+# ставить атрибут ещё и здесь незачем.
 
 # --- 5. Лаунчер .exe (если доступен Go; иначе остаётся .bat) ----------------
 $LauncherSrc = Join-Path $PSScriptRoot "..\launcher"
