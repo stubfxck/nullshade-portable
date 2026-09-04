@@ -110,7 +110,7 @@ jobs:
                 title       = "Zen Browser Portable ${{ steps.ver.outputs.tag }}"
                 url         = "${{ steps.release.outputs.url }}"
                 description = "New zero-trace build published, ready to download."
-                color       = 0x8A5CF6
+                color       = 0x403A68
                 thumbnail   = @{ url = $avatar }
                 fields      = @(
                   @{ name = "Zen version"; value = "**${{ steps.ver.outputs.tag }}**"; inline = $true }
