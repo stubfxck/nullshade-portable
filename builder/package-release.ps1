@@ -160,6 +160,7 @@ $SupportDir = Join-Path $Pkg "Support"
 # он же перепрячет папку на диске пользователя, если та расшилась при копировании.
 Copy-Item (Join-Path $TemplateDir "Start-ZenPortable.bat") $SupportDir
 Copy-Item (Join-Path $TemplateDir "README-PORTABLE.md") $Pkg
+Copy-Item (Join-Path $TemplateDir "README-PORTABLE_RU.md") $Pkg
 
 @"
 Zen Browser Portable
@@ -216,7 +217,9 @@ $Required = @(
     "Data\profile\chrome\JS\private-tab.uc.mjs",
     "Support\Start-ZenPortable.bat",
     "Support\VERSION.txt",
-    "Support\version.json"
+    "Support\version.json",
+    "README-PORTABLE.md",
+    "README-PORTABLE_RU.md"
 )
 foreach ($r in $Required) {
     if (-not (Test-Path (Join-Path $Pkg $r))) { throw "VALIDATION FAILED: missing $r" }

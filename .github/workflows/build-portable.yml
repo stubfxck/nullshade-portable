@@ -61,7 +61,7 @@ jobs:
           Add-Type -AssemblyName System.IO.Compression.FileSystem
           $archive = [System.IO.Compression.ZipFile]::OpenRead($zip.FullName)
           $entries = $archive.Entries.FullName
-          foreach ($req in @("App/Zen/zen.exe", "App/Zen/config.js", "Data/profile/chrome/utils/boot.sys.mjs", "Data/profile/chrome/JS/private-tab.uc.mjs", "Support/Start-ZenPortable.bat", "Support/VERSION.txt", "Support/version.json", "ZenBrowserPortable.exe")) {
+          foreach ($req in @("App/Zen/zen.exe", "App/Zen/config.js", "Data/profile/chrome/utils/boot.sys.mjs", "Data/profile/chrome/JS/private-tab.uc.mjs", "Support/Start-ZenPortable.bat", "Support/VERSION.txt", "Support/version.json", "README-PORTABLE.md", "README-PORTABLE_RU.md", "ZenBrowserPortable.exe")) {
             if (-not ($entries -contains $req)) { throw "Zip missing $req" }
           }
           $archive.Dispose()

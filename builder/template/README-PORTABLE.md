@@ -1,76 +1,78 @@
 # Zen Browser Portable
 
-Переносная (portable) сборка Zen Browser. Всё хранится в этой папке — профиль,
-настройки, расширения, история. Можно носить на флешке или внешнем SSD.
+*[Читать по-русски](README-PORTABLE_RU.md)* · 💬 Discord: [discord.gg/eCQYpRx8Wv](https://discord.gg/eCQYpRx8Wv)
 
-## Запуск
+A portable build of Zen Browser. Everything lives inside this folder — profile,
+settings, extensions, history. Carry it on a USB flash drive or an external SSD.
 
-```text
-ZenBrowserPortable.exe             — запускайте это
-Support\Start-ZenPortable.bat      — запасной вариант, если .exe заблокирован политиками
-```
-
-(`Support\` — служебная папка, обычно скрыта; в ней лежит запасной .bat
-и файлы с версией для автообновления. Трогать не нужно.)
-
-## Где лежат данные
+## Launching
 
 ```text
-Data/profile   — профиль (настройки, расширения, история)
-Data/cache     — кэш
-Data/temp      — временные файлы
-App/Zen        — бинарники браузера
+ZenBrowserPortable.exe             — run this
+Support\Start-ZenPortable.bat      — fallback, if the .exe is blocked by policy
 ```
 
-## Обновление
+(`Support\` is an internal folder, normally hidden; it holds the fallback .bat
+and the version files used for auto-update. No need to touch it.)
 
-`ZenBrowserPortable.exe` сам проверяет новые версии при каждом запуске и
-обновляет `App\Zen\` (и себя) — скачивать zip вручную не нужно. Поведение
-настраивается в `Data\launcher-config.json` (создаётся при первом запуске):
+## Where your data lives
 
-- `autoUpdateEnabled: false` — выключить проверку обновлений совсем.
-- `updateMode: "block"` — ставить обновление до запуска Zen.
-- `updateMode: "background"` (по умолчанию) — запускать сразу, обновление
-  скачается в фоне и встанет при следующем запуске.
+```text
+Data/profile   — profile (settings, extensions, history)
+Data/cache     — cache
+Data/temp      — temp files
+App/Zen        — browser binaries
+```
 
-## Важно
+## Updates
 
-- Закрывайте браузер перед извлечением флешки.
-- Не запускайте одновременно два экземпляра из одной папки.
+`ZenBrowserPortable.exe` checks for new versions on every launch and updates
+`App\Zen\` (and itself) automatically — no manual zip downloads needed.
+Behavior is configurable in `Data\launcher-config.json` (created on first launch):
+
+- `autoUpdateEnabled: false` — turn off update checking entirely.
+- `updateMode: "block"` — install the update before Zen launches.
+- `updateMode: "background"` (default) — launch immediately, the update
+  downloads in the background and applies on the next launch.
+
+## Important
+
+- Close the browser before removing the USB drive.
+- Don't run two instances from the same folder at once.
 
 ---
 
-## Максимальная локальность (режим «ноль следов»)
+## Maximum locality (zero-trace mode)
 
-Эта сборка спроектирована так, чтобы НИЧЕГО не писать за пределы своей папки:
+This build is designed to write NOTHING outside its own folder:
 
-| Защита | Как реализована |
+| Protection | How it's done |
 |---|---|
-| Профиль, кэш, расширения, DRM-модули | `-profile Data\profile` — всё внутри |
-| Временные файлы | TEMP/TMP → `Data\temp` |
-| Переменные AppData | APPDATA/LOCALAPPDATA → `Data\appdata` |
-| Крэш-дампы в %APPDATA%\zen | отключены (MOZ_CRASHREPORTER_DISABLE=1) |
-| Телеметрия-пинги | отключены (prefs + policies.json) |
-| Автообновление (пишет в C:\ProgramData) | отключено (policies.json) |
-| Запись в реестр «браузер по умолчанию» | отключена (DontCheckDefaultBrowser) |
-| Регистрация уведомлений в реестре (AppUserModelID) | уведомления рисует сам браузер (`alerts.useSystemBackend=false`) |
-| Jump list на панели задач | не создаётся (`browser.taskbar.lists.*=false`) |
-| Случайно созданные папки в AppData | лаунчер `ZenBrowserPortable.exe` удаляет их после закрытия браузера (только те, которых не было до запуска) |
+| Profile, cache, extensions, DRM modules | `-profile Data\profile` — everything stays inside |
+| Temp files | TEMP/TMP → `Data\temp` |
+| AppData environment variables | APPDATA/LOCALAPPDATA → `Data\appdata` |
+| Crash dumps in %APPDATA%\zen | disabled (`MOZ_CRASHREPORTER_DISABLE=1`) |
+| Telemetry pings | disabled (prefs + policies.json) |
+| Auto-update (writes to C:\ProgramData) | disabled (policies.json) |
+| "Default browser" registry entry | disabled (`DontCheckDefaultBrowser`) |
+| Notification registration in the registry (AppUserModelID) | notifications are drawn by the browser itself (`alerts.useSystemBackend=false`) |
+| Taskbar jump list | never created (`browser.taskbar.lists.*=false`) |
+| Stray folders accidentally created in AppData | removed by `ZenBrowserPortable.exe` after the browser closes (only the ones that didn't exist before launch) |
 
-ВАЖНО:
+IMPORTANT:
 
-1. Запускайте только через `ZenBrowserPortable.exe`. Уборка после выхода работает только в .exe-лаунчере (.bat — запасной, без уборки).
-2. Никогда не запускайте `App\Zen\zen.exe` напрямую — он создаст пустой профиль в системном AppData.
+1. Always launch via `ZenBrowserPortable.exe`. Cleanup on exit only happens in the .exe launcher (the .bat is a fallback, with no cleanup).
+2. Never run `App\Zen\zen.exe` directly — it will create an empty profile in your system AppData.
 
-### Честные пределы (неустранимо без песочницы/VM)
+### Honest limits (unavoidable without a sandbox/VM)
 
-Следы, которые создаёт САМА Windows при запуске любого .exe (не браузер, а ОС):
+Traces created by Windows itself when launching any .exe (not the browser — the OS):
 
-- Prefetch (`C:\Windows\Prefetch\ZEN.EXE-*.pf`) — факт запуска программы;
-- SRUM / журналы событий / кэш иконок — системная статистика;
-- файл подкачки (в нём могут оказаться фрагменты памяти процесса).
+- Prefetch (`C:\Windows\Prefetch\ZEN.EXE-*.pf`) — evidence the program ran;
+- SRUM / event logs / icon cache — system-level statistics;
+- the page file (may contain fragments of the process's memory).
 
-Это ограничение любого portable-ПО без исключений (включая PortableApps.com).
-Если нужен АБСОЛЮТНЫЙ ноль следов на машине — запускайте эту же папку внутри
-песочницы: Windows Sandbox (встроен в Win10/11 Pro) или Sandboxie-Plus (бесплатный) —
-они перехватывают в том числе записи САМОЙ ОС.
+This is a limitation of any portable software, no exceptions (including
+PortableApps.com). If you need ABSOLUTE zero traces on the machine, run this
+same folder inside a sandbox: Windows Sandbox (built into Win10/11 Pro) or
+Sandboxie-Plus (free) — those also intercept the OS's own writes.
