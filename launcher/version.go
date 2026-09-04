@@ -46,18 +46,22 @@ func cleanupLegacyVersionJSON(root string) {
 // обновления (Data\ никогда не перезаписывается), в отличие от файлов
 // в корне пакета.
 type launcherConfig struct {
-	Comment           string `json:"_comment"`
-	AutoUpdateEnabled bool   `json:"autoUpdateEnabled"`
-	UpdateMode        string `json:"updateMode"` // "block" или "background"
+	Comment              string `json:"_comment"`
+	AutoUpdateEnabled    bool   `json:"autoUpdateEnabled"`
+	UpdateMode           string `json:"updateMode"` // "block" или "background"
+	PrivateTabModEnabled bool   `json:"privateTabModEnabled"`
 }
 
 func defaultConfig() launcherConfig {
 	return launcherConfig{
 		Comment: "autoUpdateEnabled: true/false — включить/выключить проверку обновлений. " +
 			"updateMode: \"block\" (скачать и поставить обновление перед запуском Zen) " +
-			"или \"background\" (запустить Zen сразу, обновление скачается в фоне и встанет при следующем запуске).",
-		AutoUpdateEnabled: true,
-		UpdateMode:        "background",
+			"или \"background\" (запустить Zen сразу, обновление скачается в фоне и встанет при следующем запуске). " +
+			"privateTabModEnabled: true/false — установить и держать актуальным мод приватных вкладок " +
+			"(github.com/stubfxck/nullshade-private-tab), выключено по умолчанию.",
+		AutoUpdateEnabled:    true,
+		UpdateMode:           "background",
+		PrivateTabModEnabled: false,
 	}
 }
 

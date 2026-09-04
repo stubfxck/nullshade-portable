@@ -50,6 +50,10 @@ func main() {
 		step("Автообновление выключено (Data\\launcher-config.json).")
 	}
 
+	if cfg.PrivateTabModEnabled {
+		checkAndInstallPrivateTabMod(root, dataDir)
+	}
+
 	if _, err := os.Stat(appZenExe); err != nil {
 		fail(fmt.Errorf("zen.exe не найден: %s", appZenExe))
 	}

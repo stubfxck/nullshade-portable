@@ -18,7 +18,11 @@ import (
 
 const (
 	repoOwner = "stubfxck"
-	repoName  = "zen-browser-portable"
+	repoName  = "nullshade-portable"
+
+	modRepoOwner = "stubfxck"
+	modRepoName  = "nullshade-private-tab"
+	modID        = "private-tab"
 )
 
 type ghAsset struct {
@@ -33,7 +37,11 @@ type ghRelease struct {
 }
 
 func fetchLatestRelease() (*ghRelease, error) {
-	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/releases/latest", repoOwner, repoName)
+	return fetchLatestReleaseFor(repoOwner, repoName)
+}
+
+func fetchLatestReleaseFor(owner, repo string) (*ghRelease, error) {
+	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/releases/latest", owner, repo)
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, err
@@ -273,6 +281,43 @@ func copySupportDir(srcDir, dstDir string) error {
 			return err
 		}
 		if err := os.WriteFile(filepath.Join(dstDir, e.Name()), b, 0o644); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// extractZipPrefix распаковывает все записи zip-архива с указанным префиксом
+// пути в targetDir, сохраняя относительную структуру. Используется для мода:
+// в отличие от extractUpdateZip (который выдёргивает конкретные, заранее
+// известные файлы браузера), тут произвольное дерево файлов оверлея.
+func extractZipPrefix(zipPath, prefix, targetDir string) error {
+	r, err := zip.OpenReader(zipPath)
+	if err != nil {
+		return err
+	}
+	defer r.Close()
+
+	for _, f := range r.File {
+		name := strings.ReplaceAll(f.Name, "\\", "/")
+		if !strings.HasPrefix(name, prefix) {
+			continue
+		}
+		rel := strings.TrimPrefix(name, prefix)
+		if rel == "" {
+			continue
+		}
+		target := filepath.Join(targetDir, filepath.FromSlash(rel))
+		if f.FileInfo().IsDir() {
+			if err := os.MkdirAll(target, 0o755); err != nil {
+				return err
+			}
+			continue
+		}
+		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+			return err
+		}
+		if err := extractZipFileTo(f, target); err != nil {
 			return err
 		}
 	}

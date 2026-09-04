@@ -67,13 +67,15 @@ your profile):
 ```json
 {
   "autoUpdateEnabled": true,
-  "updateMode": "background"
+  "updateMode": "background",
+  "privateTabModEnabled": false
 }
 ```
 
 - `autoUpdateEnabled: false` — turn off update checking entirely.
 - `updateMode: "block"` — download and install the update before Zen launches (slower, but always on the latest version).
 - `updateMode: "background"` — launch Zen immediately, download in the background, apply automatically on the next launch (default).
+- `privateTabModEnabled: true` — install and keep up to date the [private-tab mod](https://github.com/stubfxck/nullshade-private-tab) (opt-in, off by default).
 
 Only `App\Zen\` gets updated — your profile in `Data\` is never touched.
 

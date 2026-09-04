@@ -64,13 +64,15 @@ ZenBrowserPortable/
 ```json
 {
   "autoUpdateEnabled": true,
-  "updateMode": "background"
+  "updateMode": "background",
+  "privateTabModEnabled": false
 }
 ```
 
 - `autoUpdateEnabled: false` — полностью выключить проверку обновлений.
 - `updateMode: "block"` — скачать и поставить обновление ДО запуска Zen (дольше, зато сразу на последней версии).
 - `updateMode: "background"` — запустить Zen сразу, обновление скачается в фоне и встанет автоматически при следующем запуске (по умолчанию).
+- `privateTabModEnabled: true` — установить и держать актуальным [мод приватных вкладок](https://github.com/stubfxck/nullshade-private-tab) (по умолчанию выключено).
 
 Обновляется только `App\Zen\` — ваш профиль в `Data\` при этом не трогается.
 
