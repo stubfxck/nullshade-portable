@@ -116,8 +116,8 @@ jobs:
                   @{ name = "Zen version"; value = "**${{ steps.ver.outputs.tag }}**"; inline = $true }
                   @{ name = "Architecture"; value = "**${{ steps.ver.outputs.arch }}**"; inline = $true }
                   @{ name = "Size"; value = "**${{ steps.ver.outputs.sizemb }} MB**"; inline = $true }
-                  @{ name = "Download"; value = "[ZenBrowserPortable-${{ steps.ver.outputs.tag }}.zip](${{ steps.release.outputs.url }})"; inline = $true }
-                  @{ name = "Changelog"; value = "[Zen release notes](https://zen-browser.app/release-notes/#${{ steps.ver.outputs.tag }})"; inline = $true }
+                  @{ name = "Download"; value = "[ZenBrowserPortable-${{ steps.ver.outputs.tag }}.zip](${{ steps.release.outputs.url }})"; inline = $false }
+                  @{ name = "Changelog"; value = "[Zen release notes](https://zen-browser.app/release-notes/#${{ steps.ver.outputs.tag }})"; inline = $false }
                 )
                 footer      = @{ text = "Nullshade Studio — automated build"; icon_url = $avatar }
                 timestamp   = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
