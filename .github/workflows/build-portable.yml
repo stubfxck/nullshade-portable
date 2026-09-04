@@ -109,17 +109,17 @@ jobs:
               @{
                 title       = "Zen Browser Portable ${{ steps.ver.outputs.tag }}"
                 url         = "${{ steps.release.outputs.url }}"
-                description = "Новая zero-trace сборка опубликована и готова к скачиванию."
+                description = "New zero-trace build published, ready to download."
                 color       = 0x8A5CF6
                 thumbnail   = @{ url = $avatar }
                 fields      = @(
-                  @{ name = "Версия Zen"; value = "**${{ steps.ver.outputs.tag }}**"; inline = $true }
-                  @{ name = "Архитектура"; value = "**${{ steps.ver.outputs.arch }}**"; inline = $true }
-                  @{ name = "Размер"; value = "**${{ steps.ver.outputs.sizemb }} МБ**"; inline = $true }
-                  @{ name = "Скачать"; value = "[ZenBrowserPortable-${{ steps.ver.outputs.tag }}.zip](${{ steps.release.outputs.url }})" }
-                  @{ name = "Что нового в Zen"; value = "[Release notes](https://zen-browser.app/release-notes/#${{ steps.ver.outputs.tag }})" }
+                  @{ name = "Zen version"; value = "**${{ steps.ver.outputs.tag }}**"; inline = $true }
+                  @{ name = "Architecture"; value = "**${{ steps.ver.outputs.arch }}**"; inline = $true }
+                  @{ name = "Size"; value = "**${{ steps.ver.outputs.sizemb }} MB**"; inline = $true }
+                  @{ name = "Download"; value = "[ZenBrowserPortable-${{ steps.ver.outputs.tag }}.zip](${{ steps.release.outputs.url }})"; inline = $true }
+                  @{ name = "Changelog"; value = "[Zen release notes](https://zen-browser.app/release-notes/#${{ steps.ver.outputs.tag }})"; inline = $true }
                 )
-                footer      = @{ text = "Nullshade Studio — автосборка"; icon_url = $avatar }
+                footer      = @{ text = "Nullshade Studio — automated build"; icon_url = $avatar }
                 timestamp   = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
               }
             )
