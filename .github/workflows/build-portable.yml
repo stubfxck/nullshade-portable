@@ -112,6 +112,7 @@ jobs:
                 description = "New zero-trace build published, ready to download."
                 color       = 0x403A68
                 thumbnail   = @{ url = $avatar }
+                image       = @{ url = "https://raw.githubusercontent.com/stubfxck/nullshade-portable/main/.github/assets/embed-spacer.webp" }
                 fields      = @(
                   @{ name = "Zen version"; value = "**${{ steps.ver.outputs.tag }}**"; inline = $true }
                   @{ name = "Architecture"; value = "**${{ steps.ver.outputs.arch }}**"; inline = $true }
