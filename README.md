@@ -1,9 +1,14 @@
 # Zen Browser Portable
 
+*от [Nullshade Studio](https://github.com/stubfxck)*
+
 **Неофициальная portable-сборка [Zen Browser](https://zen-browser.app/) для Windows.**
 Без установки, без прав администратора, без следов в реестре и AppData —
 все данные (профиль, расширения, история, кэш) живут в одной папке.
-Можно носить на флешке.
+Можно носить на флешке или внешнем SSD.
+
+Приватные вкладки без нового окна и другие моды — отдельно, в
+[nullshade-private-tab](https://github.com/stubfxck/nullshade-private-tab).
 
 Сборки обновляются автоматически: GitHub Actions каждый понедельник берёт
 свежий официальный релиз Zen, переупаковывает его в portable, прогоняет
