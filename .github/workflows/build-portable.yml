@@ -48,6 +48,9 @@ jobs:
           echo "zipname=$($zip.Name)" >> $env:GITHUB_OUTPUT
           $tag = ($zip.BaseName -replace '^ZenBrowserPortable-','' -replace '-win-.*$','')
           echo "tag=$tag" >> $env:GITHUB_OUTPUT
+          echo "sizemb=$([math]::Round($zip.Length/1MB))" >> $env:GITHUB_OUTPUT
+          $archMatch = [regex]::Match($zip.BaseName, '-win-(.+)$')
+          echo "arch=win-$($archMatch.Groups[1].Value)" >> $env:GITHUB_OUTPUT
 
       - name: Smoke test zip
         shell: pwsh
@@ -58,7 +61,7 @@ jobs:
           Add-Type -AssemblyName System.IO.Compression.FileSystem
           $archive = [System.IO.Compression.ZipFile]::OpenRead($zip.FullName)
           $entries = $archive.Entries.FullName
-          foreach ($req in @("App/Zen/zen.exe", "Support/Start-ZenPortable.bat", "Support/VERSION.txt", "Support/version.json", "ZenBrowserPortable.exe")) {
+          foreach ($req in @("App/Zen/zen.exe", "App/Zen/config.js", "Data/profile/chrome/utils/boot.sys.mjs", "Data/profile/chrome/JS/private-tab.uc.mjs", "Support/Start-ZenPortable.bat", "Support/VERSION.txt", "Support/version.json", "ZenBrowserPortable.exe")) {
             if (-not ($entries -contains $req)) { throw "Zip missing $req" }
           }
           $archive.Dispose()
@@ -74,6 +77,7 @@ jobs:
       # Дополнительно публикуем как релиз в ТВОЁМ репозитории,
       # чтобы была постоянная ссылка на скачивание
       - name: Publish release in this repo
+        id: release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: portable-${{ steps.ver.outputs.tag }}
@@ -82,3 +86,32 @@ jobs:
           body: |
             Автоматическая portable-сборка Zen Browser ${{ steps.ver.outputs.tag }}.
             Распакуй zip и запусти Start-ZenPortable.bat.
+
+      # Уведомление в Discord — только если задан секрет DISCORD_WEBHOOK_URL
+      # (Settings → Secrets and variables → Actions → New repository secret).
+      # Без секрета шаг просто пропускается, форки/чужие клоны не ломает.
+      - name: Notify Discord
+        if: ${{ secrets.DISCORD_WEBHOOK_URL != '' }}
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        shell: pwsh
+        run: |
+          $body = @{
+            username   = "Zen Portable Builder"
+            embeds     = @(
+              @{
+                title       = "Zen Portable ${{ steps.ver.outputs.tag }}"
+                url         = "${{ steps.release.outputs.url }}"
+                description = "Новая portable-сборка готова."
+                color       = 0x8A5CF6
+                fields      = @(
+                  @{ name = "Версия Zen"; value = "${{ steps.ver.outputs.tag }}"; inline = $true }
+                  @{ name = "Архитектура"; value = "${{ steps.ver.outputs.arch }}"; inline = $true }
+                  @{ name = "Размер"; value = "${{ steps.ver.outputs.sizemb }} МБ"; inline = $true }
+                  @{ name = "Скачать"; value = "${{ steps.release.outputs.url }}" }
+                )
+                timestamp   = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+              }
+            )
+          } | ConvertTo-Json -Depth 5
+          Invoke-RestMethod -Uri $env:DISCORD_WEBHOOK_URL -Method Post -ContentType "application/json" -Body $body

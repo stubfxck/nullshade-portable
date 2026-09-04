@@ -81,6 +81,26 @@ New-Item -ItemType Directory -Force `
 
 Copy-Item -Recurse -Force "$CoreDir\*" (Join-Path $Pkg "App\Zen")
 
+# --- fx-autoconfig (MPL-2.0, vendored в builder/vendor/) ---------------------
+# Даёт нам privileged JS в браузерном chrome (нужно для мода приватных вкладок,
+# см. Data\profile\chrome\JS\private-tab.uc.mjs). Просто набор файлов поверх
+# официальных бинарников Zen — исходники браузера не патчатся.
+$VendorFxAutoconfig = Join-Path $PSScriptRoot "vendor\fx-autoconfig"
+Copy-Item (Join-Path $VendorFxAutoconfig "program\config.js") (Join-Path $Pkg "App\Zen")
+New-Item -ItemType Directory -Force (Join-Path $Pkg "App\Zen\defaults\pref") | Out-Null
+Copy-Item (Join-Path $VendorFxAutoconfig "program\defaults\pref\config-prefs.js") (Join-Path $Pkg "App\Zen\defaults\pref")
+
+$ProfileChrome = Join-Path $Pkg "Data\profile\chrome"
+New-Item -ItemType Directory -Force (Join-Path $ProfileChrome "utils"), (Join-Path $ProfileChrome "JS"), (Join-Path $ProfileChrome "CSS") | Out-Null
+Copy-Item -Force (Join-Path $VendorFxAutoconfig "profile\chrome\utils\*") (Join-Path $ProfileChrome "utils")
+
+# Наши моды поверх fx-autoconfig
+$ProfileModsDir = Join-Path $PSScriptRoot "template\profile-mods\chrome"
+Copy-Item -Force (Join-Path $ProfileModsDir "JS\*") (Join-Path $ProfileChrome "JS")
+if (Test-Path (Join-Path $ProfileModsDir "CSS")) {
+    Copy-Item -Force (Join-Path $ProfileModsDir "CSS\*") (Join-Path $ProfileChrome "CSS") -ErrorAction SilentlyContinue
+}
+
 # Portable-переопределения: не обновляться, не трогать систему, не слать отчёты.
 # Причины каждой строки описаны в README (раздел «Почему portable может сломаться»).
 @"
@@ -101,6 +121,10 @@ pref("app.normandy.enabled", false);
 pref("browser.crashReports.unsubmittedCheck.autoSubmit2", false);
 // Маркер portable-режима (используется сообществом portable-сборок Zen)
 pref("zen.portable.mode", true);
+// fx-autoconfig: включает загрузку privileged-скриптов из Data\profile\chrome\JS
+// (нужно для мода приватных вкладок). general.config.* уже включены отдельным
+// config-prefs.js от fx-autoconfig (App\Zen\defaults\pref\).
+pref("userChromeJS.enabled", true);
 // --- «Ноль следов» в системе ---
 // Системные toast-уведомления Windows требуют регистрации AppUserModelID
 // в реестре HKCU — рисуем уведомления средствами самого браузера
@@ -186,6 +210,10 @@ Write-Host "== Validating package..."
 $Required = @(
     "App\Zen\zen.exe",
     "App\Zen\omni.ja",
+    "App\Zen\config.js",
+    "App\Zen\defaults\pref\config-prefs.js",
+    "Data\profile\chrome\utils\boot.sys.mjs",
+    "Data\profile\chrome\JS\private-tab.uc.mjs",
     "Support\Start-ZenPortable.bat",
     "Support\VERSION.txt",
     "Support\version.json"

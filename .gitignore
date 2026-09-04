@@ -1,0 +1,10 @@
+# Build scratch (package-release.ps1 / build-local.ps1 output)
+/work/
+/output/
+
+# Go
+/launcher/*.exe
+
+# OS junk
+.DS_Store
+Thumbs.db
