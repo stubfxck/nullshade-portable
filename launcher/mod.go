@@ -72,17 +72,17 @@ func checkAndInstallPrivateTabMod(root, dataDir string) {
 
 	rel, err := fetchLatestReleaseFor(modRepoOwner, modRepoName)
 	if err != nil {
-		warn("Не смог проверить обновление мода private-tab: " + err.Error())
+		warn(t("Не смог проверить обновление мода private-tab: ", "Couldn't check for a private-tab mod update: ") + err.Error())
 	} else {
 		latest := strings.TrimPrefix(rel.TagName, "v")
 		if installed[modID] != latest {
 			asset := findFirstZipAsset(rel)
 			if asset == nil {
-				warn("В релизе мода " + rel.TagName + " не нашлось zip.")
+				warn(t("В релизе мода ", "The mod release ") + rel.TagName + t(" не нашлось zip.", " has no zip asset."))
 			} else {
-				step(fmt.Sprintf("Мод private-tab: %s -> %s", displayOrNone(installed[modID]), latest))
+				step(fmt.Sprintf(t("Мод private-tab: %s -> %s", "private-tab mod: %s -> %s"), displayOrNone(installed[modID]), latest))
 				if err := downloadModToCache(cache, asset); err != nil {
-					warn("Не смог скачать мод: " + err.Error())
+					warn(t("Не смог скачать мод: ", "Couldn't download the mod: ") + err.Error())
 				} else {
 					installed[modID] = latest
 					writeInstalledMods(dataDir, installed)
@@ -95,15 +95,15 @@ func checkAndInstallPrivateTabMod(root, dataDir string) {
 		return // мод ещё ни разу не скачался (нет сети при первом включении флага) — нечего накатывать
 	}
 	if err := applyModFromCache(root, dataDir, cache); err != nil {
-		warn("Не смог применить мод private-tab: " + err.Error())
+		warn(t("Не смог применить мод private-tab: ", "Couldn't apply the private-tab mod: ") + err.Error())
 		return
 	}
-	ok("Мод private-tab установлен (" + installed[modID] + ").")
+	ok(t("Мод private-tab установлен (", "private-tab mod installed (") + installed[modID] + ").")
 }
 
 func displayOrNone(v string) string {
 	if v == "" {
-		return "не установлен"
+		return t("не установлен", "not installed")
 	}
 	return v
 }

@@ -54,11 +54,18 @@ type launcherConfig struct {
 
 func defaultConfig() launcherConfig {
 	return launcherConfig{
-		Comment: "autoUpdateEnabled: true/false — включить/выключить проверку обновлений. " +
-			"updateMode: \"block\" (скачать и поставить обновление перед запуском Zen) " +
-			"или \"background\" (запустить Zen сразу, обновление скачается в фоне и встанет при следующем запуске). " +
-			"privateTabModEnabled: true/false — установить и держать актуальным мод приватных вкладок " +
-			"(github.com/stubfxck/nullshade-private-tab), выключено по умолчанию.",
+		Comment: t(
+			"autoUpdateEnabled: true/false — включить/выключить проверку обновлений. "+
+				"updateMode: \"block\" (скачать и поставить обновление перед запуском Zen) "+
+				"или \"background\" (запустить Zen сразу, обновление скачается в фоне и встанет при следующем запуске). "+
+				"privateTabModEnabled: true/false — установить и держать актуальным мод приватных вкладок "+
+				"(github.com/stubfxck/nullshade-private-tab), выключено по умолчанию.",
+			"autoUpdateEnabled: true/false — turn update checking on/off. "+
+				"updateMode: \"block\" (download and install the update before Zen launches) "+
+				"or \"background\" (launch Zen right away, the update downloads in the background and applies on the next launch). "+
+				"privateTabModEnabled: true/false — install and keep up to date the private-tab mod "+
+				"(github.com/stubfxck/nullshade-private-tab), off by default.",
+		),
 		AutoUpdateEnabled:    true,
 		UpdateMode:           "background",
 		PrivateTabModEnabled: false,

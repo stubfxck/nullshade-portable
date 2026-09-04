@@ -56,7 +56,7 @@ func fetchLatestReleaseFor(owner, repo string) (*ghRelease, error) {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("GitHub API вернул статус %d", resp.StatusCode)
+		return nil, fmt.Errorf(t("GitHub API вернул статус %d", "GitHub API returned status %d"), resp.StatusCode)
 	}
 
 	var rel ghRelease
@@ -73,7 +73,7 @@ func pickZipAsset(rel *ghRelease, arch string) (*ghAsset, error) {
 			return a, nil
 		}
 	}
-	return nil, fmt.Errorf("не нашёл .zip для архитектуры %q в релизе %s", arch, rel.TagName)
+	return nil, fmt.Errorf(t("не нашёл .zip для архитектуры %q в релизе %s", "couldn't find a .zip for architecture %q in release %s"), arch, rel.TagName)
 }
 
 // downloadFile качает url в dest. При showProgress печатает процент прямо
@@ -93,7 +93,7 @@ func downloadFile(url, dest string, size int64, showProgress bool) error {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("скачивание вернуло статус %d", resp.StatusCode)
+		return fmt.Errorf(t("скачивание вернуло статус %d", "download returned status %d"), resp.StatusCode)
 	}
 
 	if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
@@ -136,7 +136,7 @@ func (w *progressWriter) print() {
 	if w.total > 0 {
 		pct = int(w.written * 100 / w.total)
 	}
-	fmt.Printf("\r"+ansiCyan+"> "+ansiReset+"Скачиваю... %3d%% (%.1f/%.1f МБ)  ",
+	fmt.Printf("\r"+ansiCyan+"> "+ansiReset+t("Скачиваю... %3d%% (%.1f/%.1f МБ)  ", "Downloading... %3d%% (%.1f/%.1f MB)  "),
 		pct, float64(w.written)/1024/1024, float64(w.total)/1024/1024)
 }
 
@@ -221,7 +221,7 @@ func extractUpdateZip(zipPath, appZenTarget string) (*updatePayload, error) {
 		}
 	}
 	if payload.exe == nil {
-		return nil, fmt.Errorf("в архиве не нашёлся ZenBrowserPortable.exe")
+		return nil, fmt.Errorf(t("в архиве не нашёлся ZenBrowserPortable.exe", "ZenBrowserPortable.exe not found in the archive"))
 	}
 	return payload, nil
 }
@@ -363,7 +363,7 @@ func swapAppZen(root, stagedAppZen string) error {
 
 	if _, err := os.Stat(target); err == nil {
 		if err := os.Rename(target, backup); err != nil {
-			return fmt.Errorf("не смог отложить старую версию (закрой браузер и попробуй снова): %w", err)
+			return fmt.Errorf(t("не смог отложить старую версию (закрой браузер и попробуй снова): %w", "couldn't move the old version aside (close the browser and try again): %w"), err)
 		}
 	}
 	if err := os.Rename(stagedAppZen, target); err != nil {
@@ -385,7 +385,7 @@ func applySelfUpdate(exeBytes []byte) error {
 	})
 	if err != nil {
 		if rerr := update.RollbackError(err); rerr != nil {
-			return fmt.Errorf("откат после неудачного обновления тоже не удался: %v (исходная ошибка: %v)", rerr, err)
+			return fmt.Errorf(t("откат после неудачного обновления тоже не удался: %v (исходная ошибка: %v)", "rollback after a failed update also failed: %v (original error: %v)"), rerr, err)
 		}
 		return err
 	}
@@ -396,14 +396,14 @@ func applySelfUpdate(exeBytes []byte) error {
 // и, в зависимости от cfg.UpdateMode, либо ставит обновление сразу (блокируя
 // запуск), либо запускает Zen немедленно и качает обновление в фоне.
 func checkAndHandleUpdate(root, dataDir string, ver *localVersion, cfg launcherConfig) {
-	step("Проверяю обновления...")
+	step(t("Проверяю обновления...", "Checking for updates..."))
 	rel, err := fetchLatestRelease()
 	if err != nil {
-		warn("Не смог проверить обновления (нет сети или GitHub недоступен): " + err.Error())
+		warn(t("Не смог проверить обновления (нет сети или GitHub недоступен): ", "Couldn't check for updates (no network or GitHub is unreachable): ") + err.Error())
 		return
 	}
 	if rel.TagName == ver.PortableTag {
-		ok("Версии совпадают (" + ver.PortableTag + ")")
+		ok(t("Версии совпадают (", "Versions match (") + ver.PortableTag + ")")
 		return
 	}
 
@@ -413,25 +413,25 @@ func checkAndHandleUpdate(root, dataDir string, ver *localVersion, cfg launcherC
 		return
 	}
 
-	step(fmt.Sprintf("Найдено обновление: %s -> %s", ver.PortableTag, rel.TagName))
+	step(fmt.Sprintf(t("Найдено обновление: %s -> %s", "Update found: %s -> %s"), ver.PortableTag, rel.TagName))
 
 	if cfg.UpdateMode == "block" {
 		if err := downloadAndApplyBlocking(root, dataDir, asset, rel.TagName); err != nil {
-			warn("Не смог установить обновление: " + err.Error() + " — запускаю текущую версию.")
+			warn(t("Не смог установить обновление: ", "Couldn't install the update: ") + err.Error() + t(" — запускаю текущую версию.", " — launching the current version."))
 			return
 		}
-		ok("Обновление " + rel.TagName + " установлено.")
+		ok(t("Обновление ", "Update ") + rel.TagName + t(" установлено.", " installed."))
 		return
 	}
 
 	// background: не задерживаем пользователя, качаем параллельно с работой браузера.
-	step("Скачаю обновление в фоне, пока пользуешься браузером.")
+	step(t("Скачаю обновление в фоне, пока пользуешься браузером.", "Downloading the update in the background while you use the browser."))
 	go func() {
 		if err := downloadAndStageUpdate(dataDir, asset, rel.TagName); err != nil {
 			return // тихо: попробуем снова при следующем запуске
 		}
 		notify("Zen Browser Portable",
-			"Обновление "+rel.TagName+" скачано.\nУстановится автоматически при следующем запуске.")
+			t("Обновление ", "Update ")+rel.TagName+t(" скачано.\nУстановится автоматически при следующем запуске.", " downloaded.\nWill be installed automatically on the next launch."))
 	}()
 }
 
@@ -445,20 +445,20 @@ func downloadAndApplyBlocking(root, dataDir string, asset *ghAsset, tag string) 
 		return err
 	}
 
-	step("Распаковываю...")
+	step(t("Распаковываю...", "Extracting..."))
 	stagedAppZen := filepath.Join(tmpDir, "App-Zen-new")
 	payload, err := extractUpdateZip(zipPath, stagedAppZen)
 	if err != nil {
 		return err
 	}
 
-	step("Устанавливаю...")
+	step(t("Устанавливаю...", "Installing..."))
 	if err := swapAppZen(root, stagedAppZen); err != nil {
 		return err
 	}
 	writeSupportFiles(root, payload)
 	if err := applySelfUpdate(payload.exe); err != nil {
-		warn("Браузер обновлён, но не смог обновить сам лаунчер: " + err.Error())
+		warn(t("Браузер обновлён, но не смог обновить сам лаунчер: ", "Browser updated, but couldn't update the launcher itself: ") + err.Error())
 	}
 	return nil
 }
@@ -518,16 +518,16 @@ func applyPendingUpdateIfAny(root, dataDir string) {
 		return
 	}
 
-	step("Устанавливаю ранее скачанное обновление (" + manifest.Tag + ")...")
+	step(t("Устанавливаю ранее скачанное обновление (", "Installing the update downloaded earlier (") + manifest.Tag + ")...")
 
 	stagedAppZen := filepath.Join(pending, "App-Zen")
 	if _, err := os.Stat(stagedAppZen); err != nil {
-		warn("Отложенное обновление повреждено, пропускаю.")
+		warn(t("Отложенное обновление повреждено, пропускаю.", "The pending update is corrupted, skipping."))
 		os.RemoveAll(pending)
 		return
 	}
 	if err := swapAppZen(root, stagedAppZen); err != nil {
-		warn("Не смог установить отложенное обновление: " + err.Error())
+		warn(t("Не смог установить отложенное обновление: ", "Couldn't install the pending update: ") + err.Error())
 		return // pending не чистим — попробуем ещё раз в следующий запуск
 	}
 	if err := copySupportDir(filepath.Join(pending, "Support"), filepath.Join(root, "Support")); err == nil {
@@ -536,9 +536,9 @@ func applyPendingUpdateIfAny(root, dataDir string) {
 	}
 	if exeBytes, err := os.ReadFile(filepath.Join(pending, "launcher.exe")); err == nil {
 		if err := applySelfUpdate(exeBytes); err != nil {
-			warn("Не смог обновить сам лаунчер: " + err.Error())
+			warn(t("Не смог обновить сам лаунчер: ", "Couldn't update the launcher itself: ") + err.Error())
 		}
 	}
 	os.RemoveAll(pending)
-	ok("Обновление " + manifest.Tag + " установлено.")
+	ok(t("Обновление ", "Update ") + manifest.Tag + t(" установлено.", " installed."))
 }

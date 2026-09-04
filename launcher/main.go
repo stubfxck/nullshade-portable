@@ -44,10 +44,13 @@ func main() {
 		if ver, err := readVersionJSON(root); err == nil {
 			checkAndHandleUpdate(root, dataDir, ver, cfg)
 		} else {
-			warn("version.json не найден — пропускаю проверку обновлений (ручная/локальная сборка?).")
+			warn(t(
+				"version.json не найден — пропускаю проверку обновлений (ручная/локальная сборка?).",
+				"version.json not found — skipping update check (manual/local build?).",
+			))
 		}
 	} else {
-		step("Автообновление выключено (Data\\launcher-config.json).")
+		step(t("Автообновление выключено (Data\\launcher-config.json).", "Auto-update disabled (Data\\launcher-config.json)."))
 	}
 
 	if cfg.PrivateTabModEnabled {
@@ -55,10 +58,10 @@ func main() {
 	}
 
 	if _, err := os.Stat(appZenExe); err != nil {
-		fail(fmt.Errorf("zen.exe не найден: %s", appZenExe))
+		fail(fmt.Errorf(t("zen.exe не найден: %s", "zen.exe not found: %s"), appZenExe))
 	}
 
-	step("Запускаю Zen...")
+	step(t("Запускаю Zen...", "Launching Zen..."))
 	hideConsoleWindow()
 	runZen(root, appZenExe, dataDir)
 }

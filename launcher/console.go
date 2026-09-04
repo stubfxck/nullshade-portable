@@ -91,7 +91,7 @@ func notify(title, text string) {
 
 func pauseForError() {
 	fmt.Println()
-	fmt.Println(ansiGray + "Нажмите Enter, чтобы закрыть..." + ansiReset)
+	fmt.Println(ansiGray + t("Нажмите Enter, чтобы закрыть...", "Press Enter to close...") + ansiReset)
 	var discard string
 	fmt.Scanln(&discard)
 }
