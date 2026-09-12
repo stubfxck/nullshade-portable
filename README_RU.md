@@ -4,10 +4,11 @@
 
 *[Read this in English](README.md)*
 
-**Неофициальная portable-сборка [Zen Browser](https://zen-browser.app/) для Windows.**
-Без установки, без прав администратора, без следов в реестре и AppData —
-все данные (профиль, расширения, история, кэш) живут в одной папке.
-Можно носить на флешке или внешнем SSD.
+**Неофициальная portable-сборка [Zen Browser](https://zen-browser.app/) для Windows и Linux.**
+На Windows — без установки, без прав администратора, без следов в реестре и AppData;
+на Linux — вообще ничего не пишет за пределы своей папки. Все данные
+(профиль, расширения, история, кэш) живут в одной папке. Можно носить на
+флешке или внешнем SSD.
 
 Приватные вкладки без нового окна и другие моды — отдельно, в
 [nullshade-private-tab](https://github.com/stubfxck/nullshade-private-tab).
@@ -22,9 +23,11 @@
 
 ## Скачать
 
-▶ **[Последняя версия — в Releases](../../releases/latest)** — файл вида `ZenBrowserPortable-<версия>-win-x86_64.zip`
+▶ **[Последняя версия — в Releases](../../releases/latest)** — в каждом релизе сразу обе платформы:
+`ZenBrowserPortable-<версия>-win-x86_64.zip` и `ZenBrowserPortable-<версия>-linux-x86_64.tar.gz`
+(плюс варианты `-arm64`/`-aarch64` для обеих).
 
-### Быстрый старт
+### Быстрый старт — Windows
 
 1. Скачайте zip из [Releases](../../releases/latest) и распакуйте в любую папку (диск, флешка, внешний SSD).
 2. Запустите **`ZenBrowserPortable.exe`**.
@@ -35,23 +38,36 @@
 
 Подробная инструкция для пользователей лежит внутри каждого архива: `README-PORTABLE.md`.
 
+### Быстрый старт — Linux (Debian/Ubuntu/Mint и подобные)
+
+1. Скачайте tar.gz из [Releases](../../releases/latest) и распакуйте: `tar -xzf ZenBrowserPortable-*-linux-x86_64.tar.gz`.
+2. Запустите **`./ZenBrowserPortable`** из распакованной папки.
+3. Всё, то же самое, что на Windows — данные остаются внутри `Data/`.
+
+> Если в архиве почему-то нет бинарника лаунчера (редкий случай — только если
+> сборка прошла без доступного Go), используйте `Support/start-zen-portable.sh` —
+> делает то же самое, только без самообновления.
+
 ### Что внутри архива
 
 ```text
 ZenBrowserPortable/
-├─ ZenBrowserPortable.exe   ← запускать это
-├─ README-PORTABLE.md       ← инструкция
-├─ App/Zen/                 ← браузер (официальные бинарники Zen, не трогать)
-├─ Data/                    ← ВСЕ ваши данные (профиль, кэш, temp, launcher-config.json)
-└─ Support/                 ← служебное (скрытая папка, трогать не нужно)
-   ├─ Start-ZenPortable.bat ← запасной запуск
-   ├─ VERSION.txt           ← версия и дата сборки (для людей)
-   └─ version.json          ← версия для автообновления (для лаунчера)
+├─ ZenBrowserPortable(.exe)   ← запускать это
+├─ README-PORTABLE.md         ← инструкция
+├─ App/Zen/                   ← браузер (официальные бинарники Zen, не трогать)
+├─ Data/                      ← ВСЕ ваши данные (профиль, кэш, temp, launcher-config.json)
+└─ Support/                   ← служебное (на Windows — скрытая папка, на Linux — обычная)
+   ├─ Start-ZenPortable.bat   ← запасной запуск на Windows
+   ├─ start-zen-portable.sh   ← запасной запуск на Linux
+   ├─ VERSION.txt             ← версия и дата сборки (для людей)
+   └─ version.json            ← версия для автообновления (для лаунчера)
 ```
 
-На виду только `.exe`, инструкция и папки `App`/`Data` — всё служебное убрано
-в скрытую `Support\` (лаунчер сам следит, чтобы она оставалась скрытой,
-даже если архиватор при распаковке этот атрибут не перенёс).
+На Windows на виду только `.exe`, инструкция и папки `App`/`Data` — всё
+служебное убрано в скрытую `Support\` (лаунчер сам следит, чтобы она
+оставалась скрытой, даже если архиватор при распаковке этот атрибут не
+перенёс). На Linux `Support/` не прячется — это не то, что пользователи этой
+платформы ожидают от обычной папки, поэтому она просто видна.
 
 ### Обновление
 
@@ -97,8 +113,8 @@ ZenBrowserPortable/
 
 Два правила:
 
-1. Запускайте только через `ZenBrowserPortable.exe` (уборка следов есть только в нём).
-2. Не запускайте `App\Zen\zen.exe` напрямую — создаст пустой профиль в системном AppData.
+1. Запускайте только через лаунчер `ZenBrowserPortable`/`ZenBrowserPortable.exe` (уборка следов есть только в нём).
+2. Не запускайте `App/Zen/zen`/`App\Zen\zen.exe` напрямую — создаст пустой профиль в системном доме/AppData.
 
 ---
 
@@ -110,13 +126,16 @@ ZenBrowserPortable/
 
 | Файл | Назначение |
 |---|---|
-| `.github/workflows/build-portable.yml` | автосборка: каждый понедельник + вручную через Run workflow |
-| `builder/package-release.ps1` | скачивает релиз → распаковывает → собирает portable → проверяет → zip |
-| `builder/build-local.ps1` | альтернатива: полная сборка из исходников (локально, долго) |
-| `launcher/*.go` | исходник `ZenBrowserPortable.exe`: запуск Zen в режиме «ноль следов» (`main.go`), проверка/установка обновлений (`update.go`), конфиг и version.json (`version.go`), консольный UI (`console.go`) |
-| `builder/template/` | файлы, которые кладутся в каждый пакет (.bat, README-PORTABLE.md) |
+| `.github/workflows/build-portable.yml` | автосборка обеих платформ: каждый понедельник + вручную через Run workflow (джобы `portable-windows` и `portable-linux`) |
+| `builder/package-release.ps1` | Windows: скачивает релиз → распаковывает → собирает portable → проверяет → zip |
+| `builder/package-release.sh` | Linux: та же задача, на bash — скачивает официальный tar.xz → собирает portable → проверяет (включая то, что исполняемый бит реально пережил упаковку) → tar.gz |
+| `builder/build-local.ps1` | альтернатива: полная сборка из исходников под Windows (локально, долго) |
+| `launcher/*.go` | исходник лаунчера, разнесён по build-тегам там, где платформы реально отличаются (`platform_windows.go`/`platform_linux.go`, `console_windows.go`/`console_linux.go`, `archive_windows.go`/`archive_linux.go` — zip vs tar.gz при самообновлении) — всё остальное (`main.go`, `update.go`, `version.go`, `mod.go`) общее |
+| `builder/template/` | файлы, которые кладутся в каждый пакет (Start-ZenPortable.bat, start-zen-portable.sh, README-PORTABLE.md) |
 
-### Собрать локально (нужен только 7-Zip; Go — опционально для .exe-лаунчера)
+### Собрать локально
+
+Windows (нужен только 7-Zip; Go — опционально для .exe-лаунчера):
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\builder\package-release.ps1                  # последняя версия
@@ -124,7 +143,16 @@ powershell -ExecutionPolicy Bypass -File .\builder\package-release.ps1 -Version 
 powershell -ExecutionPolicy Bypass -File .\builder\package-release.ps1 -Arch arm64      # Windows ARM
 ```
 
-Результат: `output\ZenBrowserPortable-<версия>-win-<арх>.zip`.
+Linux (нужны `curl`, `jq`, `tar`; Go — опционально для бинарника лаунчера):
+
+```bash
+./builder/package-release.sh                    # последняя версия, x86_64
+./builder/package-release.sh --version 1.21.9b
+./builder/package-release.sh --arch aarch64      # Linux ARM
+```
+
+Результат: `output/ZenBrowserPortable-<версия>-win-<арх>.zip` или
+`output/ZenBrowserPortable-<версия>-linux-<арх>.tar.gz`.
 
 ### Полная сборка из исходников (продвинутый вариант)
 
@@ -153,8 +181,9 @@ powershell -ExecutionPolicy Bypass -File .\builder\build-local.ps1 -Ref 1.21.9b
 Да. Для скорости и корректной работы песочницы браузера рекомендуется NTFS (не FAT32).
 
 **Пропали данные после запуска!**
-Скорее всего, был запущен `App\Zen\zen.exe` напрямую — он создал пустой профиль в системе.
-Данные целы: закройте браузер и запустите `ZenBrowserPortable.exe`.
+Скорее всего, был запущен `App\Zen\zen.exe`/`App/Zen/zen` напрямую — он создал пустой
+профиль в системе. Данные целы: закройте браузер и запустите лаунчер
+(`ZenBrowserPortable.exe`/`ZenBrowserPortable`).
 
 **Как проверить, что portable-режим работает?**
 Откройте `about:profiles` — активный профиль должен указывать на `...\Data\profile`.

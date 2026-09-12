@@ -1,0 +1,5 @@
+# Shell scripts must stay LF regardless of core.autocrlf on Windows dev
+# machines — a CRLF shebang line ("#!/usr/bin/env bash\r") fails with
+# "bad interpreter" on real Linux, which is exactly where these run (CI and
+# end users' machines).
+*.sh text eol=lf

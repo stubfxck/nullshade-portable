@@ -66,14 +66,17 @@ func fetchLatestReleaseFor(owner, repo string) (*ghRelease, error) {
 	return &rel, nil
 }
 
-func pickZipAsset(rel *ghRelease, arch string) (*ghAsset, error) {
+// pickReleaseAsset ищет ассет для этой платформы (releaseFileExt: .zip на
+// Windows, .tar.gz на Linux — см. platform_windows.go/platform_linux.go) и
+// архитектуры (ver.Arch, например "win-x86_64" или "linux-x86_64").
+func pickReleaseAsset(rel *ghRelease, arch string) (*ghAsset, error) {
 	for i := range rel.Assets {
 		a := &rel.Assets[i]
-		if strings.HasSuffix(a.Name, ".zip") && strings.Contains(a.Name, arch) {
+		if strings.HasSuffix(a.Name, releaseFileExt) && strings.Contains(a.Name, arch) {
 			return a, nil
 		}
 	}
-	return nil, fmt.Errorf(t("не нашёл .zip для архитектуры %q в релизе %s", "couldn't find a .zip for architecture %q in release %s"), arch, rel.TagName)
+	return nil, fmt.Errorf(t("не нашёл %s для архитектуры %q в релизе %s", "couldn't find a %s for architecture %q in release %s"), releaseFileExt, arch, rel.TagName)
 }
 
 // downloadFile качает url в dest. При showProgress печатает процент прямо
@@ -147,84 +150,18 @@ func (w *progressWriter) finish() {
 }
 
 // updatePayload — то, что достаём из скачанного релиза, кроме содержимого
-// App/Zen/ (оно распаковывается прямо в appZenTarget, см. extractUpdateZip).
+// App/Zen/ (оно распаковывается прямо в appZenTarget, см. extractUpdateZip
+// в archive_windows.go/archive_linux.go).
 type updatePayload struct {
-	exe     []byte            // ZenBrowserPortable.exe
+	exe     []byte            // launcherAssetName (ZenBrowserPortable[.exe])
 	version []byte            // Support/version.json
-	support map[string][]byte // остальные файлы Support/* (bat, VERSION.txt) — имя файла -> содержимое
+	support map[string][]byte // остальные файлы Support/* (bat/sh, VERSION.txt) — имя файла -> содержимое
 }
 
 // extractUpdateZip распаковывает из скачанного релиза только то, что нужно
-// для обновления: содержимое App/Zen/ (в appZenTarget), сам лаунчер и файлы
-// Support/*. Data/ и прочее из архива не трогаем.
-//
-// Поддержка старых установок: если в архиве почему-то нет Support/ (старый
-// билдер), version.json ищем и в корне архива — так уже обновлённый лаунчер
-// не спотыкается о зип, собранный до переезда в Support\.
-func extractUpdateZip(zipPath, appZenTarget string) (*updatePayload, error) {
-	r, err := zip.OpenReader(zipPath)
-	if err != nil {
-		return nil, err
-	}
-	defer r.Close()
-
-	if err := os.RemoveAll(appZenTarget); err != nil {
-		return nil, err
-	}
-	if err := os.MkdirAll(appZenTarget, 0o755); err != nil {
-		return nil, err
-	}
-
-	payload := &updatePayload{support: map[string][]byte{}}
-
-	for _, f := range r.File {
-		name := strings.ReplaceAll(f.Name, "\\", "/")
-		switch {
-		case name == "ZenBrowserPortable.exe":
-			payload.exe, err = readZipFile(f)
-			if err != nil {
-				return nil, err
-			}
-		case name == "Support/version.json", name == "version.json":
-			payload.version, err = readZipFile(f)
-			if err != nil {
-				return nil, err
-			}
-		case strings.HasPrefix(name, "Support/"):
-			rel := strings.TrimPrefix(name, "Support/")
-			if rel == "" || f.FileInfo().IsDir() {
-				continue
-			}
-			b, err := readZipFile(f)
-			if err != nil {
-				return nil, err
-			}
-			payload.support[rel] = b
-		case strings.HasPrefix(name, "App/Zen/"):
-			rel := strings.TrimPrefix(name, "App/Zen/")
-			if rel == "" {
-				continue
-			}
-			target := filepath.Join(appZenTarget, filepath.FromSlash(rel))
-			if f.FileInfo().IsDir() {
-				if err := os.MkdirAll(target, 0o755); err != nil {
-					return nil, err
-				}
-				continue
-			}
-			if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
-				return nil, err
-			}
-			if err := extractZipFileTo(f, target); err != nil {
-				return nil, err
-			}
-		}
-	}
-	if payload.exe == nil {
-		return nil, fmt.Errorf(t("в архиве не нашёлся ZenBrowserPortable.exe", "ZenBrowserPortable.exe not found in the archive"))
-	}
-	return payload, nil
-}
+// для обновления: содержимое App/Zen/, сам лаунчер и файлы Support/*.
+// Формат архива и реализация — платформенные, см. archive_windows.go
+// (zip) и archive_linux.go (tar.gz); сигнатура и поведение одинаковые.
 
 // dumpSupportFiles пишет version.json и прочие файлы из payload.support в dir
 // (это либо root\Support, либо временная папка стейджинга для фонового режима).
@@ -407,7 +344,7 @@ func checkAndHandleUpdate(root, dataDir string, ver *localVersion, cfg launcherC
 		return
 	}
 
-	asset, err := pickZipAsset(rel, ver.Arch)
+	asset, err := pickReleaseAsset(rel, ver.Arch)
 	if err != nil {
 		warn(err.Error())
 		return
@@ -439,7 +376,7 @@ func downloadAndApplyBlocking(root, dataDir string, asset *ghAsset, tag string) 
 	tmpDir := filepath.Join(dataDir, "temp", "update")
 	os.RemoveAll(tmpDir)
 	defer os.RemoveAll(tmpDir)
-	zipPath := filepath.Join(tmpDir, "update.zip")
+	zipPath := filepath.Join(tmpDir, "update"+releaseFileExt)
 
 	if err := downloadFile(asset.BrowserDownloadURL, zipPath, asset.Size, true); err != nil {
 		return err
@@ -469,7 +406,7 @@ func downloadAndApplyBlocking(root, dataDir string, asset *ghAsset, tag string) 
 func downloadAndStageUpdate(dataDir string, asset *ghAsset, tag string) error {
 	pending := filepath.Join(dataDir, "pending-update")
 	os.RemoveAll(pending)
-	zipPath := filepath.Join(dataDir, "temp", "pending-update.zip")
+	zipPath := filepath.Join(dataDir, "temp", "pending-update"+releaseFileExt)
 	defer os.Remove(zipPath)
 
 	if err := downloadFile(asset.BrowserDownloadURL, zipPath, asset.Size, false); err != nil {

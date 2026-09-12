@@ -12,6 +12,11 @@ on:
         type: choice
         options: [x86_64, arm64]
         default: x86_64
+      linux_arch:
+        description: "Архитектура Linux"
+        type: choice
+        options: [x86_64, aarch64]
+        default: x86_64
   schedule:
     # Каждый понедельник в 06:00 UTC — автоматически собирает свежую версию
     - cron: "0 6 * * 1"
@@ -20,7 +25,7 @@ permissions:
   contents: write
 
 jobs:
-  portable:
+  portable-windows:
     runs-on: windows-latest
     steps:
       - name: Checkout builder
@@ -87,7 +92,8 @@ jobs:
           files: output/*.zip
           body: |
             Автоматическая portable-сборка Zen Browser ${{ steps.ver.outputs.tag }}.
-            Распакуй zip и запусти Start-ZenPortable.bat.
+            Windows: распакуй zip и запусти ZenBrowserPortable.exe.
+            Linux: смотри отдельный tar.gz в этом же релизе (если сборка Linux уже прошла).
 
       # Уведомление в Discord — только если задан секрет DISCORD_WEBHOOK_URL
       # (Settings → Secrets and variables → Actions → New repository secret).
@@ -107,7 +113,7 @@ jobs:
             avatar_url = $avatar
             embeds     = @(
               @{
-                title       = "Zen Browser Portable ${{ steps.ver.outputs.tag }}"
+                title       = "Zen Browser Portable ${{ steps.ver.outputs.tag }} (Windows)"
                 url         = "${{ steps.release.outputs.url }}"
                 description = "New zero-trace build published, ready to download."
                 color       = 0x403A68
@@ -126,3 +132,123 @@ jobs:
             )
           } | ConvertTo-Json -Depth 6
           Invoke-RestMethod -Uri $env:DISCORD_WEBHOOK_URL -Method Post -ContentType "application/json" -Body $body
+
+  portable-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout builder
+        uses: actions/checkout@v4
+
+      - name: Setup Go (for launcher)
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+
+      - name: Build portable package
+        run: |
+          version="${{ github.event.inputs.version }}"
+          [ -z "$version" ] && version="latest"
+          arch="${{ github.event.inputs.linux_arch }}"
+          [ -z "$arch" ] && arch="x86_64"
+          chmod +x builder/package-release.sh
+          ./builder/package-release.sh --version "$version" --arch "$arch"
+
+      - name: Read version tag
+        id: ver
+        run: |
+          tarball=$(ls output/*.tar.gz | head -1)
+          name=$(basename "$tarball")
+          echo "tarname=$name" >> "$GITHUB_OUTPUT"
+          tag=$(echo "$name" | sed -E 's/^ZenBrowserPortable-//; s/-linux-.*$//')
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          sizemb=$(( $(stat -c%s "$tarball") / 1024 / 1024 ))
+          echo "sizemb=$sizemb" >> "$GITHUB_OUTPUT"
+          arch=$(echo "$name" | sed -E 's/.*-linux-(.+)\.tar\.gz$/linux-\1/')
+          echo "arch=$arch" >> "$GITHUB_OUTPUT"
+
+      - name: Smoke test tarball
+        run: |
+          tarball=$(ls output/*.tar.gz | head -1)
+          size=$(stat -c%s "$tarball")
+          minsize=$((80*1024*1024))
+          if [ "$size" -lt "$minsize" ]; then
+            echo "Tarball too small: $((size/1024/1024)) MB - likely broken build" >&2
+            exit 1
+          fi
+          entries=$(tar -tzf "$tarball")
+          for req in "App/Zen/zen" "Support/start-zen-portable.sh" "Support/VERSION.txt" "Support/version.json" "README-PORTABLE.md" "README-PORTABLE_RU.md" "ZenBrowserPortable"; do
+            found=$(echo "$entries" | grep -E "^[^/]+/$req$" || true)
+            if [ -z "$found" ]; then
+              echo "Tarball missing $req" >&2
+              exit 1
+            fi
+          done
+          # Проверяем, что unix-права на zen сохранились в самом архиве (не
+          # только в рабочей папке сборки) — ровно то, ради чего выбран tar.gz,
+          # а не zip.
+          zenmode=$(tar -tvzf "$tarball" | grep -E "/App/Zen/zen$" | awk '{print $1}')
+          case "$zenmode" in
+            -*x*) echo "zen executable bit present in archive: $zenmode" ;;
+            *) echo "zen in archive is NOT executable ($zenmode)" >&2; exit 1 ;;
+          esac
+          echo "Smoke test OK: $(basename "$tarball"), $((size/1024/1024)) MB"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.ver.outputs.tarname }}
+          path: output/*.tar.gz
+          retention-days: 30
+
+      - name: Publish release in this repo
+        id: release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: portable-${{ steps.ver.outputs.tag }}
+          name: Zen Portable ${{ steps.ver.outputs.tag }}
+          files: output/*.tar.gz
+          body: |
+            Автоматическая portable-сборка Zen Browser ${{ steps.ver.outputs.tag }}.
+            Linux: распакуй tar.gz и запусти ./ZenBrowserPortable (или Support/start-zen-portable.sh, если Go недоступен при сборке).
+            Windows: смотри отдельный zip в этом же релизе (если сборка Windows уже прошла).
+
+      - name: Notify Discord
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          if [ -z "$DISCORD_WEBHOOK_URL" ]; then
+            echo "DISCORD_WEBHOOK_URL secret не задан — пропускаю уведомление."
+            exit 0
+          fi
+          avatar="https://avatars.githubusercontent.com/u/140010018?v=4"
+          timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          body=$(jq -n \
+            --arg tag "${{ steps.ver.outputs.tag }}" \
+            --arg arch "${{ steps.ver.outputs.arch }}" \
+            --arg sizemb "${{ steps.ver.outputs.sizemb }}" \
+            --arg url "${{ steps.release.outputs.url }}" \
+            --arg tarname "${{ steps.ver.outputs.tarname }}" \
+            --arg avatar "$avatar" \
+            --arg ts "$timestamp" \
+            '{
+              username: "Nullshade Studio",
+              avatar_url: $avatar,
+              embeds: [{
+                title: ("Zen Browser Portable " + $tag + " (Linux)"),
+                url: $url,
+                description: "New zero-trace build published, ready to download.",
+                color: 4209256,
+                thumbnail: { url: $avatar },
+                image: { url: "https://raw.githubusercontent.com/stubfxck/nullshade-portable/main/.github/assets/embed-spacer.webp" },
+                fields: [
+                  { name: "Zen version", value: ("**" + $tag + "**"), inline: true },
+                  { name: "Architecture", value: ("**" + $arch + "**"), inline: true },
+                  { name: "Size", value: ("**" + $sizemb + " MB**"), inline: true },
+                  { name: "Download", value: ("[" + $tarname + "](" + $url + ")"), inline: false },
+                  { name: "Changelog", value: ("[Zen release notes](https://zen-browser.app/release-notes/#" + $tag + ")"), inline: false }
+                ],
+                footer: { text: "Nullshade Studio — automated build", icon_url: $avatar },
+                timestamp: $ts
+              }]
+            }')
+          curl -s -X POST -H "Content-Type: application/json" -d "$body" "$DISCORD_WEBHOOK_URL"

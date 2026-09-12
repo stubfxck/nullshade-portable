@@ -15,7 +15,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"syscall"
 )
 
 func main() {
@@ -28,7 +27,7 @@ func main() {
 	}
 	root := filepath.Dir(exePath)
 	dataDir := filepath.Join(root, "Data")
-	appZenExe := filepath.Join(root, "App", "Zen", "zen.exe")
+	appZenExe := filepath.Join(root, "App", "Zen", zenBinaryName)
 
 	// Support\ (bat-запуск, version.json) не для обычного использования —
 	// прячем каждый раз, на случай если архиватор при распаковке не сохранил
@@ -58,7 +57,7 @@ func main() {
 	}
 
 	if _, err := os.Stat(appZenExe); err != nil {
-		fail(fmt.Errorf(t("zen.exe не найден: %s", "zen.exe not found: %s"), appZenExe))
+		fail(fmt.Errorf(t("%s не найден: %s", "%s not found: %s"), zenBinaryName, appZenExe))
 	}
 
 	step(t("Запускаю Zen...", "Launching Zen..."))
@@ -69,17 +68,17 @@ func main() {
 func runZen(root, app, dataDir string) {
 	profile := filepath.Join(dataDir, "profile")
 	temp := filepath.Join(dataDir, "temp")
-	appdataR := filepath.Join(dataDir, "appdata", "Roaming")
-	appdataL := filepath.Join(dataDir, "appdata", "Local")
 
-	for _, dir := range []string{profile, temp, appdataR, appdataL} {
+	dirs := append([]string{profile, temp}, runtimeExtraDirs(dataDir)...)
+	for _, dir := range dirs {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			fail(err)
 		}
 	}
 
-	// Снимок «до запуска»: каталоги в настоящем системном AppData, которые
-	// браузер теоретически может создать. Удалим после выхода только те,
+	// Снимок «до запуска»: каталоги вне portable-папки, которые браузер
+	// теоретически может создать (см. systemLeftoverCandidates в
+	// platform_windows.go/platform_linux.go). Удалим после выхода только те,
 	// которых сейчас нет (существующие = чужие данные, их не трогаем).
 	candidates := systemLeftoverCandidates()
 	missingBefore := make([]string, 0, len(candidates))
@@ -91,17 +90,8 @@ func runZen(root, app, dataDir string) {
 
 	args := append([]string{"-profile", profile, "-no-remote"}, os.Args[1:]...)
 	cmd := exec.Command(app, args...)
-	cmd.Dir = filepath.Join(root, "App", "Zen")
-	cmd.Env = append(os.Environ(),
-		// Временные файлы — внутрь portable-папки
-		"TEMP="+temp,
-		"TMP="+temp,
-		// Всё, что резолвится через переменные окружения, — тоже внутрь
-		"APPDATA="+appdataR,
-		"LOCALAPPDATA="+appdataL,
-		// Крэш-репортер пишет дампы в %APPDATA%\zen\Crash Reports (вне portable) — выкл.
-		"MOZ_CRASHREPORTER_DISABLE=1",
-	)
+	cmd.Dir = filepath.Dir(app)
+	cmd.Env = append(os.Environ(), runtimeEnvOverrides(dataDir)...)
 
 	// Run (а не Start): ждём закрытия браузера, чтобы прибраться за ним
 	// и чтобы фоновая докачка обновления (если она идёт) успела дожить до конца.
@@ -115,50 +105,6 @@ func runZen(root, app, dataDir string) {
 	if runErr != nil {
 		fail(runErr)
 	}
-}
-
-// hideSupportDir ставит атрибут Hidden на папку Support\. Не критично, если
-// не получится (например, папки ещё нет при самой первой распаковке) —
-// молча пропускаем.
-func hideSupportDir(root string) {
-	dir := filepath.Join(root, "Support")
-	if _, err := os.Stat(dir); err != nil {
-		return
-	}
-	p, err := syscall.UTF16PtrFromString(dir)
-	if err != nil {
-		return
-	}
-	_ = syscall.SetFileAttributes(p, syscall.FILE_ATTRIBUTE_HIDDEN)
-}
-
-// systemLeftoverCandidates — известные места, куда Firefox-база может
-// создать (обычно пустые) каталоги даже в portable-режиме.
-func systemLeftoverCandidates() []string {
-	var out []string
-	home, _ := os.UserHomeDir()
-	roaming := os.Getenv("APPDATA")
-	local := os.Getenv("LOCALAPPDATA")
-	if roaming == "" && home != "" {
-		roaming = filepath.Join(home, "AppData", "Roaming")
-	}
-	if local == "" && home != "" {
-		local = filepath.Join(home, "AppData", "Local")
-	}
-	var locallow string
-	if home != "" {
-		locallow = filepath.Join(home, "AppData", "LocalLow")
-	}
-	for _, base := range []string{roaming, local, locallow} {
-		if base == "" {
-			continue
-		}
-		out = append(out,
-			filepath.Join(base, "zen"),
-			filepath.Join(base, "Mozilla"),
-		)
-	}
-	return out
 }
 
 func fail(err error) {
